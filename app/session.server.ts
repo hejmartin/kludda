@@ -1,6 +1,8 @@
-import { createCookieSessionStorage, redirect } from "@remix-run/node";
+import type { Session } from "@remix-run/node";
+import { createCookieSessionStorage } from "@remix-run/node";
 import invariant from "tiny-invariant";
-import { getProfileById } from "./models/user.server";
+import type { Player } from "./models/player.server";
+import { createPlayer, getPlayerById } from "./models/player.server";
 
 invariant(
   process.env.SESSION_SECRET,
@@ -19,87 +21,32 @@ export const sessionStorage = createCookieSessionStorage({
   },
 });
 
-const USER_SESSION_KEY = "userId";
+export const PLAYER_SESSION_KEY = "playerId";
 
 export async function getSession(request: Request) {
   const cookie = request.headers.get("Cookie");
   return sessionStorage.getSession(cookie);
 }
 
-export async function getUserId(request: Request) {
+export async function getPlayerId(request: Request) {
   const session = await getSession(request);
-  const userId = session.get(USER_SESSION_KEY);
-
-  return userId;
+  const playerId = session.get(PLAYER_SESSION_KEY);
+  return playerId;
 }
 
-export async function getUser(request: Request) {
-  const userId = await getUserId(request);
-  if (userId === undefined) return null;
+export async function getPlayer(request: Request): Promise<Player> {
+  const playerId = await getPlayerId(request);
+  let player = await getPlayerById(playerId);
 
-  const user = await getProfileById(userId);
-  if (user) return user;
-
-  throw await logout(request);
-}
-
-/**
- * Require a user session to get to a page. If none is found
- * redirect them to the login page. After login, take them to
- * the original page they wanted to get to.
- */
-export async function requireUserId(
-  request: Request,
-  redirectTo: string = new URL(request.url).pathname
-) {
-  const userId = await getUserId(request);
-  if (!userId) {
-    const searchParams = new URLSearchParams([["redirectTo", redirectTo]]);
-    throw redirect(`/login?${searchParams}`);
+  if (player == null) {
+    player = await createPlayer();
   }
 
-  return userId;
+  return player;
 }
 
-export async function requireUser(request: Request) {
-  const userId = await requireUserId(request);
-  if (userId == undefined) return null;
-
-  const profile = await getProfileById(userId);
-  if (profile) return profile;
-
-  throw await logout(request);
-}
-
-export async function createUserSession({
-  request,
-  userId,
-  remember,
-  redirectTo,
-}: {
-  request: Request;
-  userId: string;
-  remember: boolean;
-  redirectTo: string;
-}) {
-  const session = await getSession(request);
-  session.set(USER_SESSION_KEY, userId);
-  return redirect(redirectTo, {
-    headers: {
-      "Set-Cookie": await sessionStorage.commitSession(session, {
-        maxAge: remember
-          ? 60 * 60 * 24 * 7 // 7 days
-          : undefined,
-      }),
-    },
-  });
-}
-
-export async function logout(request: Request) {
-  const session = await getSession(request);
-  return redirect("/", {
-    headers: {
-      "Set-Cookie": await sessionStorage.destroySession(session),
-    },
+export async function commitSession(session: Session) {
+  return await sessionStorage.commitSession(session, {
+    maxAge: 60 * 60 * 24 * 7, // 7 days
   });
 }

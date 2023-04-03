@@ -10,7 +10,7 @@
     "build:remix": "remix build",
     "dev": "run-p dev:*",
     "dev:css": "npm run generate:css -- --watch",
-    "dev:remix": "remix dev",
+    "dev:remix": "cross-env NODE_ENV=development netlify dev",
     "e2e-test": "cypress run",
     "format": "prettier --write .",
     "generate:css": "npx tailwindcss -o ./app/styles/tailwind.css",
